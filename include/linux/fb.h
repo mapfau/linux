@@ -311,6 +311,9 @@ struct fb_ops {
 	/* called at KDB enter and leave time to prepare the console */
 	int (*fb_debug_enter)(struct fb_info *info);
 	int (*fb_debug_leave)(struct fb_info *info);
+
+	/* Export the frame buffer as a dmabuf object */
+	struct dma_buf *(*fb_dmabuf_export)(struct fb_info *info);
 };
 
 #ifdef CONFIG_FB_TILEBLITTING
@@ -450,11 +453,6 @@ struct fb_tile_ops {
 /* report to the VT layer that this fb driver can accept forced console
    output like oopses */
 #define FBINFO_CAN_FORCE_OUTPUT     0x200000
-
-struct fb_dmabuf_export {
-	__u32 fd;
-	__u32 flags;
-};
 
 struct fb_info {
 	atomic_t count;
