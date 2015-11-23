@@ -1,0 +1,246 @@
+From 0d2aafb27932d5e0e11451a616441456bd3dde9b Mon Sep 17 00:00:00 2001
+From: mapfau <pfau@peak3d.de>
+Date: Mon, 16 Nov 2015 14:11:23 +0100
+Subject: [PATCH 2/2] More hdcp tries - but its a dead end as there is no HDCP
+ key on the system...
+
+---
+ drivers/gpu/drm/exynos/exynos_hdmi.c | 93 ++++++++++++++++++++----------------
+ 1 file changed, 53 insertions(+), 40 deletions(-)
+
+diff --git a/drivers/gpu/drm/exynos/exynos_hdmi.c b/drivers/gpu/drm/exynos/exynos_hdmi.c
+index 70dd839..643b7f6 100755
+--- a/drivers/gpu/drm/exynos/exynos_hdmi.c
++++ b/drivers/gpu/drm/exynos/exynos_hdmi.c
+@@ -1391,6 +1391,8 @@ static int hdmi_connector_set_property(struct drm_connector *connector, struct d
+   
+   DRM_DEBUG_KMS("\n");
+   
++  WARN_ON(!mutex_is_locked(&mode_config->mutex));
++
+ 	if (prop != mode_config->content_protection_property)
+ 		return 0;
+ 
+@@ -1984,19 +1986,22 @@ static void hdcp_disable(struct hdmi_context *hdata)
+ static void hdcp_enable(struct hdmi_context *hdata)
+ {
+ 	hdata->hdcp_state = HDCP_STATE_WAIT_ACTIVE_RX;
+-
++  
+   DRM_DEBUG_KMS("\n");
+-	
+-  /* Enable hdcp interrupts and activate content protection */
+-	hdmi_reg_writemask_atomic(hdata, HDMI_INTC_CON, ~0, HDMI_INTC_EN_HDCP);
++  
+ 	hdmi_reg_writemask(hdata, HDMI_STATUS_EN, ~0,
+ 			HDMI_STATUS_EN_MASK_ACTIVE_RX |
+ 			HDMI_STATUS_EN_MASK_WATCHDOG |
+ 			HDMI_STATUS_EN_MASK_AN_WRITE |
+ 			HDMI_STATUS_EN_MASK_UPDATE_RI);
+-	hdmi_reg_writemask(hdata, HDMI_HDCP_CTRL1, ~0,
++
++  hdmi_reg_writemask(hdata, HDMI_HDCP_CTRL1, ~0,
+ 			HDMI_HDCP_CTRL1_MASK_CP_DESIRED);
+ 
++	/* Enable hdcp interrupts and activate content protection */
++	hdmi_reg_writemask_atomic(hdata, HDMI_INTC_CON, ~0,
++			HDMI_INTC_EN_GLOBAL | HDMI_INTC_EN_HDCP);
++	
+ 	hdcp_update_drm_property(hdata, DRM_MODE_CONTENT_PROTECTION_DESIRED);
+ }
+ 
+@@ -2147,7 +2152,8 @@ static int hdcp_start(struct hdmi_context *hdata)
+ 
+ static int hdcp_initialize(struct hdmi_context *hdata)
+ {
+-	hdata->hdcp_state = HDCP_STATE_OFF;
++	hdata->hdcp_desired = false;
++  hdata->hdcp_state = HDCP_STATE_OFF;
+ 	INIT_WORK(&hdata->hdcp_work, hdcp_work_func);
+ 
+ 	return hdcp_load_efuse_key(hdata);
+@@ -2263,17 +2269,9 @@ static void hdmi_conf_init(struct hdmi_context *hdata)
+ 	union hdmi_infoframe infoframe;
+ 
+ 	/* disable HPD interrupts from HDMI IP block, use GPIO instead */
+-	//hdmi_reg_writemask(hdata, HDMI_INTC_CON, 0, HDMI_INTC_EN_GLOBAL |
+-	//	HDMI_INTC_EN_HPD_PLUG | HDMI_INTC_EN_HPD_UNPLUG);
+-
+   hdmi_reg_writemask_atomic(hdata, HDMI_INTC_CON, 0, HDMI_INTC_EN_GLOBAL |
+     HDMI_INTC_EN_HPD_PLUG | HDMI_INTC_EN_HPD_UNPLUG);
+ 
+-  mdelay(10); 
+-  
+-	hdmi_reg_writemask_atomic(hdata, HDMI_INTC_CON, ~0,
+-		HDMI_INTC_EN_GLOBAL | HDMI_INTC_EN_HPD_PLUG | HDMI_INTC_EN_HPD_UNPLUG); 
+-
+ 	/* choose HDMI mode */
+ 	hdmi_reg_writemask(hdata, HDMI_MODE_SEL,
+ 		HDMI_MODE_HDMI_EN, HDMI_MODE_MASK);
+@@ -2690,8 +2688,8 @@ static void hdmi_conf_apply(struct hdmi_context *hdata)
+ 	hdmi_mode_apply(hdata);
+ 	hdmi_audio_control(hdata, true);
+ 
+-  hdcp_start(hdata);
+-  
++	hdcp_start(hdata);
++
+ 	hdmi_regs_dump(hdata, "start");
+ }
+ 
+@@ -2984,8 +2982,8 @@ static void hdmi_poweroff(struct exynos_drm_display *display)
+ 	struct hdmi_context *hdata = display->ctx;
+ 	struct hdmi_resources *res = &hdata->res;
+ 
+-  hdcp_stop(hdata);
+-  
++	hdcp_stop(hdata);
++
+ 	mutex_lock(&hdata->hdmi_mutex);
+ 	if (!hdata->powered)
+ 		goto out;
+@@ -3054,9 +3052,9 @@ static void hdmi_hotplug_work_func(struct work_struct *work)
+ 
+ 	hdata = container_of(work, struct hdmi_context, hotplug_work.work);
+ 
+-  if (!hdmi_is_connected(hdata))
+-    hdcp_stop(hdata);
+-  
++	if (!hdmi_is_connected(hdata))
++		hdcp_stop(hdata);
++
+ 	mutex_lock(&hdata->hdmi_mutex);
+ 	hdata->hpd = gpio_get_value(hdata->hpd_gpio);
+ 	mutex_unlock(&hdata->hdmi_mutex);
+@@ -3068,9 +3066,14 @@ static void hdmi_hotplug_work_func(struct work_struct *work)
+ static irqreturn_t hdmi_irq_thread(int irq, void *arg)
+ {
+ 	struct hdmi_context *hdata = arg;
++	u32 intc_flag;
++	intc_flag = hdmi_reg_read(hdata, HDMI_INTC_FLAG);
++
++	if (intc_flag & HDMI_INTC_FLAG_HDCP)
++		DRM_INFO("Received unexpected hdcp interrupt 0x%x\n", intc_flag);
+ 
+ 	mod_delayed_work(system_wq, &hdata->hotplug_work,
+-			msecs_to_jiffies(HOTPLUG_DEBOUNCE_MS));
++		msecs_to_jiffies(HOTPLUG_DEBOUNCE_MS));
+ 
+ 	return IRQ_HANDLED;
+ }
+@@ -3080,23 +3083,23 @@ static irqreturn_t hdcp_irq_thread(int irq, void *arg)
+ 	struct hdmi_context *hdata = arg;
+ 	u32 intc_flag;
+ 	intc_flag = hdmi_reg_read(hdata, HDMI_INTC_FLAG);
+-	
+-  if (!(intc_flag & HDMI_INTC_FLAG_HDCP)) {
+-		DRM_INFO("Received unknown interrupt 0x%x\n", intc_flag);
++
++ 	if (!(intc_flag & HDMI_INTC_FLAG_HDCP)) {
++		DRM_INFO("hdcp_irq_thread: Received unknown interrupt 0x%x\n", intc_flag);
+ 		hdmi_reg_writemask(hdata, HDMI_INTC_FLAG, ~0, intc_flag);
+ 		return IRQ_HANDLED;
+ 	}
++	DRM_INFO("hdcp_irq_thread: Received known interrupt 0x%x\n", intc_flag);
+ 	/*
+ 	 * Unlike the hotplug interrupts, the HDCP interrupt is
+ 	 * not acked through the FLAG register. This means that
+ 	 * we'll keep getting these suckers unless we mask it
+ 	 * off manually.
+ 	 */
++  hdmi_reg_writemask_atomic(hdata, HDMI_INTC_CON, 0, HDMI_INTC_EN_HDCP);
+ 
+-  DRM_DEBUG_KMS("\n");
++	//schedule_work(&hdata->hdcp_work);
+ 
+-  hdmi_reg_writemask_atomic(hdata, HDMI_INTC_CON, 0, HDMI_INTC_EN_HDCP);
+-	schedule_work(&hdata->hdcp_work);
+ 	return IRQ_HANDLED;
+ }
+ 
+@@ -3396,13 +3399,21 @@ out_get_phy_port:
+ 	if (!hdata->hdcp_port)
+ 		goto err_hdmiphy;
+ 
+-  hdata->hdcp_irq = platform_get_irq(pdev, 0);
++	/*
++	res = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
++	if (!res) {
++		DRM_ERROR("get internal interrupt resource failed.\n");
++		goto err_ddc;
++	}
++	hdata->hdcp_irq = res->start;
++	*/
++	hdata->hdcp_irq = platform_get_irq(pdev, 0);
+ 	if (hdata->hdcp_irq < 0) {
+ 		DRM_ERROR("Failed to get HDCP irq\n");
+ 		ret = hdata->hdcp_irq;
+ 		goto err_ddc;
+ 	}
+-  
++
+ 	hdata->hdcp_desired = false;
+ 
+ 	ret = hdcp_initialize(hdata);
+@@ -3411,13 +3422,15 @@ out_get_phy_port:
+ 		goto err_hdcp;
+ 	}
+ 
+-  ret = request_threaded_irq(hdata->hdcp_irq, NULL, hdcp_irq_thread,
+-			IRQF_ONESHOT, "hdmi_hdcp", hdata);
++	ret = request_threaded_irq(hdata->hdcp_irq, NULL, hdcp_irq_thread,
++			IRQF_ONESHOT | IRQF_SHARED, "hdmi_hdcp", hdata);
++	//ret = devm_request_irq(dev, hdata->hdcp_irq, hdcp_irq_thread,
++	//		0, "hdmi-hdcp", hdata);
+ 	if (ret) {
+ 		DRM_ERROR("Failed to request hdcp interrupt %d\n", ret);
+ 		goto err_hdcp;
+ 	}
+-  
++
+ 	hdata->irq = gpio_to_irq(hdata->hpd_gpio);
+ 	if (hdata->irq < 0) {
+ 		DRM_ERROR("failed to get GPIO irq\n");
+@@ -3425,8 +3438,8 @@ out_get_phy_port:
+ 		goto err_hdcp;
+ 	}
+ 
+-  spin_lock_init(&hdata->writemask_lock);
+-  
++	spin_lock_init(&hdata->writemask_lock);
++
+ 	hdata->hpd = gpio_get_value(hdata->hpd_gpio);
+ 
+ 	ret = request_threaded_irq(hdata->irq, NULL,
+@@ -3452,15 +3465,15 @@ out_get_phy_port:
+ 	ret = component_add(&pdev->dev, &hdmi_component_ops);
+ 	if (ret)
+ 		goto err_disable_pm_runtime;
+-  
+-  INIT_DELAYED_WORK(&hdata->hotplug_work, hdmi_hotplug_work_func);
+-  
++
++	INIT_DELAYED_WORK(&hdata->hotplug_work, hdmi_hotplug_work_func);
++
+ 	return ret;
+ 
+ err_disable_pm_runtime:
+ 	pm_runtime_disable(dev);
+ err_hdcp:
+-  put_device(&hdata->hdcp_port->dev);
++	put_device(&hdata->hdcp_port->dev);
+ err_hdmiphy:
+ 	if (hdata->hdmiphy_port)
+ 		put_device(&hdata->hdmiphy_port->dev);
+@@ -3481,7 +3494,7 @@ static int hdmi_remove(struct platform_device *pdev)
+ 
+ 	put_device(&hdata->hdmiphy_port->dev);
+ 	put_device(&hdata->ddc_adpt->dev);
+-  put_device(&hdata->hdcp_port->dev);
++	put_device(&hdata->hdcp_port->dev);
+ 
+ 	pm_runtime_disable(&pdev->dev);
+ 	component_del(&pdev->dev, &hdmi_component_ops);
+-- 
+2.1.4
+
