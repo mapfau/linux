@@ -42,6 +42,16 @@
 #include <linux/amlogic/amports/tsync.h>
 #include <linux/amlogic/amports/vfp.h>
 
+#include <ump/ump_kernel_interface_ref_drv.h>
+#include <ump/ump_kernel_interface.h>
+
+struct videobuf_res_memory {
+        u32 magic;
+        void *vaddr;
+        resource_size_t phy_addr;
+        unsigned long size;
+};
+
 #define AVMLVIDEO_MODULE_NAME "amlvideo"
 
 /* Wake up at about 30 fps */
@@ -908,6 +918,61 @@ static int amlvideo_mmap(struct file *file, struct vm_area_struct *vma) {
     return ret;
 }
 
+static int vidioc_expbuf(struct file *file, void *priv, struct v4l2_exportbuffer *p){
+  struct vivi_fh *fh = file->private_data;
+  struct videobuf_queue *q = &fh->vb_vidq;
+  struct vivi_dev *dev = fh->dev;
+
+  struct videobuf_res_memory *mem = NULL;
+  struct videobuf_buffer *vb = NULL;
+  struct ump_dd_physical_block umd;
+  ump_dd_handle ump = NULL;
+
+  dprintk(dev, 1, "vidio_expbuf called\n");
+
+  if (p->flags & ~O_CLOEXEC) {
+    dprintk(dev, 1, "Queue does support only O_CLOEXEC flag\n");
+    return -EINVAL;
+  }
+
+  if (p->type != q->type) {
+    dprintk(dev, 1, "qbuf: invalid buffer type\n");
+    return -EINVAL;
+  }
+
+  if (p->index >= VIDEO_MAX_FRAME) {
+    dprintk(dev, 1, "buffer index out of range\n");
+    return -EINVAL;
+  }
+
+  vb = q->bufs[p->index];
+
+  if (vb->memory != V4L2_MEMORY_MMAP) {
+    dprintk(dev, 1, "Buf is not set up for mmap\n");
+    return -EINVAL;
+  }
+
+  mem = vb->priv;
+
+  if(mem->phy_addr != 0){
+
+    umd.addr = mem->phy_addr;
+    umd.size = mem->size;
+
+    ump = ump_dd_handle_create_from_phys_blocks(&umd, 1);
+
+    p->fd = ump_dd_secure_id_get(ump);
+
+    dprintk(dev, 1, "vidio_expbuf: phy_addr valid (ump_dd_handle:%p, secureid:%d)\n", ump, p->fd);
+
+    return 0;
+  } else
+    dprintk(dev, 1, "vidio_expbuf: phy_addr invalid\n");
+
+  return -EINVAL;
+}
+
+
 static const struct v4l2_file_operations amlvideo_fops = { .owner = THIS_MODULE, .open = amlvideo_open, .release = amlvideo_close, .read = amlvideo_read, .poll = amlvideo_poll, .ioctl = video_ioctl2, /* V4L2 ioctl handler */
 .mmap = amlvideo_mmap, };
 
@@ -919,6 +984,7 @@ static const struct v4l2_ioctl_ops amlvideo_ioctl_ops = {
         .vidioc_s_fmt_vid_cap = vidioc_s_fmt_vid_cap,
         .vidioc_reqbufs = vidioc_reqbufs,
         .vidioc_querybuf = vidioc_querybuf,
+        .vidioc_expbuf = vidioc_expbuf,
         .vidioc_qbuf = vidioc_qbuf,
         .vidioc_dqbuf = vidioc_dqbuf,
         .vidioc_s_std = vidioc_s_std,
