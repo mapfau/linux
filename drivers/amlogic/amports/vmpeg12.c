@@ -329,6 +329,12 @@ static irqreturn_t vmpeg12_isr(int irq, void *dev_id)
 		else if (dec_control & DEC_CONTROL_FLAG_FORCE_SEQ_INTERLACE)
 			frame_prog = 0;
 
+
+                pr_info("frame type = %s, %s\n", (frame_prog & PICINFO_PROG) ? "Prog" : "Interlace",
+                       (((info & PICINFO_TYPE_MASK) == PICINFO_TYPE_I) ? "I-frame" :
+                       ((info & PICINFO_TYPE_MASK) == PICINFO_TYPE_P) ? "P-frame" :
+                       "B-frame"));
+
 		if (frame_prog & PICINFO_PROG) {
 			u32 index = ((reg & 0xf) - 1) & 7;
 
