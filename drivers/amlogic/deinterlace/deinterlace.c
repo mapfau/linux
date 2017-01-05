@@ -1689,6 +1689,7 @@ struct di_post_stru_s {
 	bool toggle_flag;
 	bool vscale_skip_flag;
 	uint start_pts;
+	u64 start_pts_us64;
 	int buf_type;
 };
 #define di_post_stru_t struct di_post_stru_s
@@ -4438,6 +4439,7 @@ di_buf_i->vframe->type); */
 	disp_vf->height = di_buf_i->vframe->height;
 	disp_vf->duration = di_buf_i->vframe->duration;
 	disp_vf->pts = di_buf_i->vframe->pts;
+	disp_vf->pts_us64 = di_buf_i->vframe->pts_us64;
 	disp_vf->flag = di_buf_i->vframe->flag;
 	disp_vf->canvas0Addr = di_post_idx[di_post_stru.canvas_id][0];
 	disp_vf->canvas1Addr = di_post_idx[di_post_stru.canvas_id][0];
@@ -5311,9 +5313,12 @@ PROCESS_FUN_NULL;
 = di_buf->di_buf_dup_p[0];
 					di_buf->di_buf[1] = NULL;
 					queue_out(di_buf->di_buf[0]);
-					if (frame_count == 0)
+					if (frame_count == 0) {
 						di_post_stru.start_pts
 = di_buf->vframe->pts;
+						di_post_stru.start_pts_us64
+= di_buf->vframe->pts_us64;
+					}
 
 					di_lock_irqfiq_save(
 irq_flag2, fiq_flag);
@@ -5336,6 +5341,8 @@ start_frame_drop_count) {
 (di_post_stru.start_pts != 0) && (di_buf->vframe->pts == 0))
 								di_buf->vframe->pts
 = di_post_stru.start_pts;
+								di_buf->vframe->pts_us64
+= di_post_stru.start_pts_us64;
 								di_post_stru.start_pts = 0;
 						}
 						queue_in(
@@ -5496,9 +5503,12 @@ di_buf->di_buf_dup_p[1];
 					if ((check_start_drop_prog &&
 is_progressive(ready_di_buf->vframe)) || !is_progressive(ready_di_buf->vframe))
 						check_drop = true;
-					if (check_drop && (frame_count == 0))
+					if (check_drop && (frame_count == 0)) {
 						di_post_stru.start_pts =
 di_buf->vframe->pts;
+						di_post_stru.start_pts_us64 =
+di_buf->vframe->pts_us64;
+					}
 					if ((check_drop &&
 (frame_count < start_frame_drop_count)) || (di_buf->di_buf[0]->throw_flag)) {
 						queue_in(di_buf, QUEUE_TMP);
@@ -5511,9 +5521,12 @@ di_buf, __func__, __LINE__);
 						if (check_drop &&
 (frame_count == start_frame_drop_count)) {
 							if (
-(di_post_stru.start_pts != 0) && (di_buf->vframe->pts == 0))
+(di_post_stru.start_pts != 0) && (di_buf->vframe->pts == 0)) {
 								di_buf->vframe->pts =
 di_post_stru.start_pts;
+								di_buf->vframe->pts_us64 =
+di_post_stru.start_pts_us64;
+							}
 							di_post_stru.start_pts = 0;
 						}
 						queue_in(di_buf,
@@ -5668,9 +5681,12 @@ di_buf->di_buf_dup_p[1];
 
 					di_lock_irqfiq_save(irq_flag2, fiq_flag);
 					if (
-(frame_count == 0) && check_start_drop_prog)
+(frame_count == 0) && check_start_drop_prog) {
 						di_post_stru.start_pts
 = di_buf->vframe->pts;
+						di_post_stru.start_pts_us64
+= di_buf->vframe->pts_us64;
+						}
 						if (
 ((frame_count < start_frame_drop_count) &&
 check_start_drop_prog) ||
@@ -5687,9 +5703,12 @@ __func__, __LINE__);
 						if (
 (frame_count == start_frame_drop_count) &&check_start_drop_prog) {
 							if (
-(di_post_stru.start_pts != 0) && (di_buf->vframe->pts == 0))
+(di_post_stru.start_pts != 0) && (di_buf->vframe->pts == 0)) {
 								di_buf->vframe->pts =
 di_post_stru.start_pts;
+								di_buf->vframe->pts_us64 =
+di_post_stru.start_pts_us64;
+							}
 							di_post_stru.start_pts = 0;
 						}
 						queue_in(di_buf,

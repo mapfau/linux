@@ -1629,6 +1629,7 @@ static void vh264_isr(void)
 				vf->duration_pulldown = 0;
 				vf->index = buffer_index;
 				vf->pts = 0;
+				vf->pts_us64 = 0;
 
 				vf->canvas0Addr = vf->canvas1Addr =
 					spec2canvas(&buffer_spec[buffer_index]);
