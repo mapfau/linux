@@ -634,18 +634,14 @@ static struct i2c_adapter *dw_hdmi_i2c_adapter(struct dw_hdmi *hdmi)
 static void hdmi_set_cts_n(struct dw_hdmi *hdmi, unsigned int cts,
 			   unsigned int n)
 {
-	/* Must be set/cleared first */
-	hdmi_modb(hdmi, 0, HDMI_AUD_CTS3_CTS_MANUAL, HDMI_AUD_CTS3);
-
-	/* nshift factor = 0 */
-	hdmi_modb(hdmi, 0, HDMI_AUD_CTS3_N_SHIFT_MASK, HDMI_AUD_CTS3);
+	hdmi_modb(hdmi, 0x80, 0x80, HDMI_AUD_N3);
 
 	hdmi_writeb(hdmi, ((cts >> 16) & HDMI_AUD_CTS3_AUDCTS19_16_MASK) |
 		    HDMI_AUD_CTS3_CTS_MANUAL, HDMI_AUD_CTS3);
 	hdmi_writeb(hdmi, (cts >> 8) & 0xff, HDMI_AUD_CTS2);
 	hdmi_writeb(hdmi, cts & 0xff, HDMI_AUD_CTS1);
 
-	hdmi_writeb(hdmi, (n >> 16) & 0x0f, HDMI_AUD_N3);
+	hdmi_writeb(hdmi, ((n >> 16) & 0x0f) | 0x80, HDMI_AUD_N3);
 	hdmi_writeb(hdmi, (n >> 8) & 0xff, HDMI_AUD_N2);
 	hdmi_writeb(hdmi, n & 0xff, HDMI_AUD_N1);
 }
@@ -790,7 +786,7 @@ static void hdmi_set_clk_regenerator(struct dw_hdmi *hdmi,
 	spin_lock_irq(&hdmi->audio_lock);
 	hdmi->audio_n = n;
 	hdmi->audio_cts = cts;
-	hdmi_set_cts_n(hdmi, cts, hdmi->audio_enable ? n : 0);
+	hdmi_set_cts_n(hdmi, cts, n);
 	spin_unlock_irq(&hdmi->audio_lock);
 }
 
@@ -3697,8 +3693,8 @@ int dw_hdmi_bind(struct device *dev, struct device *master,
 		audio.read	= hdmi_readb;
 		audio.mod	= hdmi_modb;
 		audio.eld	= hdmi->connector.eld;
-		hdmi->enable_audio = dw_hdmi_i2s_audio_enable;
-		hdmi->disable_audio = dw_hdmi_i2s_audio_disable;
+		//hdmi->enable_audio = dw_hdmi_i2s_audio_enable;
+		//hdmi->disable_audio = dw_hdmi_i2s_audio_disable;
 
 		pdevinfo.name = "dw-hdmi-i2s-audio";
 		pdevinfo.data = &audio;
