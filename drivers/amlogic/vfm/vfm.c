@@ -383,7 +383,7 @@ static ssize_t vfm_map_store(struct class *class,
 	char *id = NULL;
 	if (vfm_debug_flag & 0x10000)
 		return count;
-	pr_err("%s:%s\n", __func__, buf);
+	/* pr_err("%s:%s\n", __func__, buf); */
 	buf_orig = kstrdup(buf, GFP_KERNEL);
 	ps = buf_orig;
 	while (1) {

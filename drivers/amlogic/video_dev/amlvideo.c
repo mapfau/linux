@@ -576,9 +576,15 @@ static int vidioc_qbuf(struct file *file, void *priv, struct v4l2_buffer *p)
 				{
 					vf = (vfq_pop(&q_omx));
 					if (p->flags & V4L2_BUF_FLAG_DONE)
+					{
+						printk("vidioc_qbuf done: index:%u\n", index);
 						vf_put(vf, RECEIVER_NAME);
+					}
 					else
+					{
+						printk("vidioc_qbuf pass: index:%u\n", index);
 						vfq_push(&q_ready, vf);
+					}
 				}
 				break;
 			}

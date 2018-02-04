@@ -999,7 +999,7 @@ static int osd_ioctl(struct fb_info *info, unsigned int cmd, unsigned long arg)
 			ret = -1;
 		break;
 	case FBIO_WAITFORVSYNC:
-		osd_wait_vsync_hw();
+		//osd_wait_vsync_hw();
 		ret = copy_to_user(argp, &ret, sizeof(u32));
 	default:
 		break;
@@ -1709,6 +1709,7 @@ static ssize_t store_debug(struct device *device, struct device_attribute *attr,
 }
 
 static ssize_t show_log_level(struct device *device,
+
 			  struct device_attribute *attr,
 			  char *buf)
 {
@@ -2375,13 +2376,15 @@ static int osd_probe(struct platform_device *pdev)
 	}
 	/* get meson-fb resource from dt */
 	prop = of_get_property(pdev->dev.of_node, "scale_mode", NULL);
-	if (prop)
+	if (prop) {
 		prop_idx = of_read_ulong(prop, 1);
-	osd_set_free_scale_mode_hw(DEV_OSD0, prop_idx);
+		osd_set_free_scale_mode_hw(DEV_OSD0, prop_idx);
+	}
 	prop = of_get_property(pdev->dev.of_node, "4k2k_fb", NULL);
-	if (prop)
+	if (prop) {
 		prop_idx = of_read_ulong(prop, 1);
-	osd_set_4k2k_fb_mode_hw(prop_idx);
+		osd_set_4k2k_fb_mode_hw(prop_idx);
+	}
 	/* get vmode from dt */
 	prop = of_get_property(pdev->dev.of_node, "vmode", NULL);
 	if (prop)

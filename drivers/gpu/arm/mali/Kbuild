@@ -13,7 +13,7 @@
 # set up defaults if not defined by the user
 TIMESTAMP ?= default
 OS_MEMORY_KERNEL_BUFFER_SIZE_IN_MB ?= 16
-USING_GPU_UTILIZATION ?= 1
+USING_GPU_UTILIZATION ?= 0
 PROFILING_SKIP_PP_JOBS ?= 0
 PROFILING_SKIP_PP_AND_GP_JOBS ?= 0
 MALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP ?= 0
@@ -21,6 +21,7 @@ MALI_PP_SCHEDULER_KEEP_SUB_JOB_STARTS_ALIGNED ?= 0
 MALI_PP_SCHEDULER_FORCE_NO_JOB_OVERLAP_BETWEEN_APPS ?= 0
 MALI_UPPER_HALF_SCHEDULING ?= 1
 MALI_ENABLE_CPU_CYCLES ?= 0
+MALI_PLATFORM ?= rk
 
 # For customer releases the Linux Device Drivers will be provided as ARM proprietary and GPL releases:
 # The ARM proprietary product will only include the license/proprietary directory
@@ -47,12 +48,6 @@ ifeq ($(USING_GPU_UTILIZATION), 1)
     endif
 endif
 
-ccflags-y += -DMESON_CPU_TYPE=0x80
-ccflags-y += -DMESON_CPU_TYPE_MESON6=0x60
-ccflags-y += -DMESON_CPU_TYPE_MESON6TVD=0x75
-ccflags-y += -DMESON_CPU_TYPE_MESON8=0x80
-ccflags-y += -DMESON_CPU_TYPE_MESON8B=0x8B
-
 ifeq ($(MALI_PLATFORM_FILES),)
 ifeq ($(CONFIG_ARCH_EXYNOS4),y)
 EXTRA_DEFINES += -DMALI_FAKE_PLATFORM_DEVICE=1
@@ -61,8 +56,6 @@ export MALI_PLATFORM_FILES_BUILDIN = $(notdir $(wildcard $(src)/platform/$(MALI_
 export MALI_PLATFORM_FILES_ADD_PREFIX = $(addprefix platform/$(MALI_PLATFORM)/,$(MALI_PLATFORM_FILES_BUILDIN)) 
 endif
 endif
-
-EXTRA_DEFINES += -DMALI_FAKE_PLATFORM_DEVICE=1
 
 mali-y += \
 	linux/mali_osk_atomics.o \
@@ -141,15 +134,6 @@ mali-y += \
 	linux/mali_osk_pm.o \
 	linux/mali_pmu_power_up_down.o \
 	__malidrv_build_info.o
-	
-# amlogic
-mali-y += \
-	platform/mali_pm_device.o \
-	platform/meson_bu/meson_main2.o \
-	platform/meson_bu/mali_clock.o \
-	platform/meson_bu/mpgpu.o \
-	platform/meson_bu/platform_gx.o \
-	platform/meson_bu/scaling.o	
 
 ifneq ($(wildcard $(src)/linux/mali_slp_global_lock.c),)
 	mali-y += linux/mali_slp_global_lock.o
@@ -172,6 +156,7 @@ ccflags-$(CONFIG_MALI400_INTERNAL_PROFILING) += -I$(src)/timestamp-$(TIMESTAMP)
 mali-$(CONFIG_DMA_SHARED_BUFFER) += linux/mali_memory_dma_buf.o
 mali-$(CONFIG_DMA_SHARED_BUFFER) += linux/mali_memory_secure.o
 mali-$(CONFIG_SYNC) += linux/mali_sync.o
+mali-$(CONFIG_MALI_DMA_BUF_FENCE) += linux/mali_dma_fence.o
 ccflags-$(CONFIG_SYNC) += -Idrivers/staging/android
 
 mali-$(CONFIG_MALI400_UMP) += linux/mali_memory_ump.o
@@ -260,6 +245,7 @@ VERSION_STRINGS += USING_PROFILING=$(CONFIG_MALI400_PROFILING)
 VERSION_STRINGS += USING_INTERNAL_PROFILING=$(CONFIG_MALI400_INTERNAL_PROFILING)
 VERSION_STRINGS += USING_GPU_UTILIZATION=$(USING_GPU_UTILIZATION)
 VERSION_STRINGS += USING_DVFS=$(CONFIG_MALI_DVFS)
+VERSION_STRINGS += USING_DMA_BUF_FENCE = $(CONFIG_MALI_DMA_BUF_FENCE)
 VERSION_STRINGS += MALI_UPPER_HALF_SCHEDULING=$(MALI_UPPER_HALF_SCHEDULING)
 
 # Create file with Mali driver configuration
