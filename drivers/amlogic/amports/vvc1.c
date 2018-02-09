@@ -123,8 +123,10 @@ static u32 pts_by_offset = 1;
 static u32 total_frame;
 static u32 next_pts;
 static u64 next_pts_us64;
+
 static u32 next_IP_pts;
 static u64 next_IP_pts_us64;
+static unsigned int bpicture_count;
 
 #ifdef DEBUG_PTS
 static u32 pts_hit, pts_missed, pts_i_hit, pts_i_missed;
@@ -274,7 +276,7 @@ static irqreturn_t vvc1_isr(int irq, void *dev_id)
 			&& (v_width != vvc1_amstream_dec_info.width)) {
 			pr_info("frame width changed %d to %d\n",
 				   vvc1_amstream_dec_info.width, v_width);
-			vvc1_amstream_dec_info.width = v_width;
+ 			vvc1_amstream_dec_info.width = v_width;
 			frame_width = v_width;
 		}
 		if (v_height && v_height <= 4096
@@ -291,8 +293,21 @@ static irqreturn_t vvc1_isr(int irq, void *dev_id)
                 picture_type = (reg >> 3) & 7;
 
 		if (pts_by_offset) {
+			//pr_info("VVC1 pic-type %d\n", picture_type);
 			offset = READ_VREG(VC1_OFFSET_REG);
-			if (pts_lookup_offset_us64(PTS_TYPE_VIDEO, offset, &pts, 0, &pts_us64) == 0) {
+			if (keyframe_pts_only && (picture_type != I_PICTURE)) {
+                                if (picture_type == B_PICTURE)
+                                  ++bpicture_count;
+                                else
+                                  bpicture_count = 0;
+				pts_valid = 0;
+			} else if (pts_lookup_offset_us64(PTS_TYPE_VIDEO, offset, &pts, 0, &pts_us64) == 0) {
+				if (keyframe_pts_only)
+				{
+					//pr_info("keyframe_pts adjust %d\n", bpicture_count);
+                                  	pts_us64 += ((bpicture_count * vvc1_amstream_dec_info.rate) * 100) / 9;
+                                  	bpicture_count = 0;
+				}
 				pts_valid = 1;
 				if (keyframe_pts_only)
 				{
@@ -875,6 +890,11 @@ static void vvc1_local_init(void)
 
 	avi_flag = (unsigned long) vvc1_amstream_dec_info.param;
 	keyframe_pts_only = (u32)vvc1_amstream_dec_info.param & 0x100;
+<<<<<<<
+=======
+        bpicture_count = 0;
+
+>>>>>>>
 	total_frame = 0;
 
 	next_pts = 0;
