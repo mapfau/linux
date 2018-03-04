@@ -750,6 +750,7 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_MPEG_VIDEO_H264_SCALING_MATRIX:		return "H264 Scaling Matrix";
 	case V4L2_CID_MPEG_VIDEO_H264_SLICE_PARAM:		return "H264 Slice Parameters";
 	case V4L2_CID_MPEG_VIDEO_H264_DECODE_PARAM:		return "H264 Decode Parameters";
+	case V4L2_CID_MPEG_VIDEO_H264_SPS_PPS_BEFORE_IDR:	return "Prepend each IDR with SPS and PPS";
 	case V4L2_CID_MPEG_VIDEO_MPEG4_I_FRAME_QP:		return "MPEG4 I-Frame QP Value";
 	case V4L2_CID_MPEG_VIDEO_MPEG4_P_FRAME_QP:		return "MPEG4 P-Frame QP Value";
 	case V4L2_CID_MPEG_VIDEO_MPEG4_B_FRAME_QP:		return "MPEG4 B-Frame QP Value";
@@ -785,6 +786,9 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_MPEG_VIDEO_VPX_PROFILE:			return "VPX Profile";
 
 	case V4L2_CID_MPEG_VIDEO_VP8_FRAME_HDR:			return "VP8 Frame Header";
+	case V4L2_CID_MPEG_VIDEO_VP9_FRAME_HDR:			return "VP9 Frame Header";
+	case V4L2_CID_MPEG_VIDEO_VP9_DECODE_PARAM:		return "VP9 Decode Parameters";
+	case V4L2_CID_MPEG_VIDEO_VP9_ENTROPY:			return "VP9 Entropy";
 
 	/* CAMERA controls */
 	/* Keep the order of the 'case's the same as in v4l2-controls.h! */
@@ -981,6 +985,7 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 	case V4L2_CID_MPEG_VIDEO_MB_RC_ENABLE:
 	case V4L2_CID_MPEG_VIDEO_H264_8X8_TRANSFORM:
 	case V4L2_CID_MPEG_VIDEO_H264_VUI_SAR_ENABLE:
+	case V4L2_CID_MPEG_VIDEO_H264_SPS_PPS_BEFORE_IDR:
 	case V4L2_CID_MPEG_VIDEO_MPEG4_QPEL:
 	case V4L2_CID_MPEG_VIDEO_REPEAT_SEQ_HEADER:
 	case V4L2_CID_WIDE_DYNAMIC_RANGE:
@@ -1170,6 +1175,15 @@ void v4l2_ctrl_fill(u32 id, const char **name, enum v4l2_ctrl_type *type,
 		break;
 	case V4L2_CID_MPEG_VIDEO_VP8_FRAME_HDR:
 		*type = V4L2_CTRL_TYPE_VP8_FRAME_HDR;
+		break;
+	case V4L2_CID_MPEG_VIDEO_VP9_FRAME_HDR:
+		*type = V4L2_CTRL_TYPE_VP9_FRAME_HDR;
+		break;
+	case V4L2_CID_MPEG_VIDEO_VP9_DECODE_PARAM:
+		*type = V4L2_CTRL_TYPE_VP9_DECODE_PARAM;
+		break;
+	case V4L2_CID_MPEG_VIDEO_VP9_ENTROPY:
+		*type = V4L2_CTRL_TYPE_VP9_ENTROPY;
 		break;
 	default:
 		*type = V4L2_CTRL_TYPE_INTEGER;
@@ -1500,6 +1514,9 @@ static int std_validate(const struct v4l2_ctrl *ctrl, u32 idx,
 	case V4L2_CTRL_TYPE_H264_SLICE_PARAM:
 	case V4L2_CTRL_TYPE_H264_DECODE_PARAM:
 	case V4L2_CTRL_TYPE_VP8_FRAME_HDR:
+	case V4L2_CTRL_TYPE_VP9_FRAME_HDR:
+	case V4L2_CTRL_TYPE_VP9_DECODE_PARAM:
+	case V4L2_CTRL_TYPE_VP9_ENTROPY:
 		return 0;
 
 	default:
@@ -2068,6 +2085,15 @@ static struct v4l2_ctrl *v4l2_ctrl_new(struct v4l2_ctrl_handler *hdl,
 		break;
 	case V4L2_CTRL_TYPE_VP8_FRAME_HDR:
 		elem_size = sizeof(struct v4l2_ctrl_vp8_frame_hdr);
+		break;
+	case V4L2_CTRL_TYPE_VP9_FRAME_HDR:
+		elem_size = sizeof(struct v4l2_ctrl_vp9_frame_hdr);
+		break;
+	case V4L2_CTRL_TYPE_VP9_DECODE_PARAM:
+		elem_size = sizeof(struct v4l2_ctrl_vp9_decode_param);
+		break;
+	case V4L2_CTRL_TYPE_VP9_ENTROPY:
+		elem_size = sizeof(struct v4l2_ctrl_vp9_entropy);
 		break;
 	default:
 		if (type < V4L2_CTRL_COMPOUND_TYPES)
