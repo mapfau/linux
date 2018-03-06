@@ -746,10 +746,6 @@
 	status = "okay";
 };
 
-&rkvdec {
-	status = "okay";
-};
-
 &rockchip_suspend {
 	rockchip,power-ctrl =
 		<&gpio1 18 GPIO_ACTIVE_LOW>,
@@ -1070,6 +1066,10 @@
 	status = "okay";
 };
 
-&vpu {
+&video_codec {
+	status = "okay";
+};
+
+&vdec {
 	status = "okay";
 };
